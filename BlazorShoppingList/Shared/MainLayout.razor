@@ -1,0 +1,39 @@
+﻿@inherits LayoutComponentBase
+
+<div class="main">
+    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">
+            <a class="navbar-brand">zdk</a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target=".navbar-collapse" @onclick="ToggleCollapse">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="navbar-collapse @(collapse ? "collapse" : "") d-sm-inline-flex flex-sm-row-reverse">
+                <ul class="navbar-nav flex-grow-1">
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                            <span class="oi oi-home" aria-hidden="true"></span> Home
+                        </NavLink>
+                    </li>
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="ShoppingLists">
+                            <span class="oi oi-list" aria-hidden="true"></span> Handlelister
+                        </NavLink>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content px-4">
+        @Body
+    </div>
+</div>
+
+@code {
+    private bool collapse = true;
+
+    private void ToggleCollapse()
+    {
+        collapse = !collapse;
+    }
+}

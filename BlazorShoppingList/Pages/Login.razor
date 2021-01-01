@@ -1,0 +1,41 @@
+﻿@using BlazorShoppingList.Data
+@using Cloudcrate.AspNetCore.Blazor.Browser.Storage;
+@using Konscious.Security.Cryptography;
+@using System.Text;
+@inject AuthenticationService AuthenticationService
+@inject ShoppingListService ShoppingListService
+@inject LocalStorage LStorage
+
+<h3>Login</h3>
+
+<input type="text" @bind="username" />
+<input type="password" @bind="password" />
+
+<button @onclick="Auth">Logg inn</button>
+
+@code {
+    private string username { get; set; }
+    private string password { get; set; }
+    private Argon2i argon2 = new Argon2i(Encoding.UTF8.GetBytes("Hello")) {
+        Iterations = 2,
+        MemorySize = 10,
+        Salt = Encoding.UTF8.GetBytes("abcd"),
+        DegreeOfParallelism = 2
+    };
+
+    [Parameter]
+    public Storage storage { get; set; }
+
+    [Parameter]
+    public EventCallback<Storage> StorageChanged { get; set; }
+
+    private async Task Auth()
+    {
+        Storage newStorage = storage;
+        newStorage.userToken = await AuthenticationService.AuthenticateAsync(username, password);
+        await LStorage.SetItemAsync("token", newStorage.userToken);
+        storage.shoppingLists = await ShoppingListService.GetShoppingListsAsync(newStorage.userToken);
+
+        await StorageChanged.InvokeAsync(newStorage);
+    }
+}

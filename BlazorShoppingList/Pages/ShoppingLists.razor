@@ -1,0 +1,211 @@
+﻿@page "/ShoppingLists"
+@page "/Home/ShoppingLists"
+@using BlazorShoppingList.Data;
+@using BlazorShoppingList.Data.Models;
+@using Cloudcrate.AspNetCore.Blazor.Browser.Storage;
+@using Konscious.Security.Cryptography;
+@implements IDisposable
+@inject AuthenticationService AuthenticationService
+@inject ShoppingListService ShoppingListService
+@inject ItemService ItemService
+@inject LocalStorage LStorage
+
+@if (storage.userToken == Guid.Empty)
+{
+    <Login @bind-Storage="storage" />
+}
+else if (storage.userToken != Guid.Empty && storage.shoppingList == 0)
+{
+    <h3 @onclick="(() => OpenList(0))">Handlelister</h3>
+
+    @if (storage.shoppingLists == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <Lists Items="storage.shoppingLists">
+            <TableHeader>
+                <th style="text-align: left;">Navn</th>
+                <th></th>
+                <th>Handling</th>
+            </TableHeader>
+            <RowTemplate>
+                <td style="text-align: left;" @onclick="(() => OpenList(context.slid, context.slname))">
+                    @context.slname
+                </td>
+                <td></td>
+                <td>
+                    <button @onclick="(() => DeleteList(context))">Slett</button>
+                </td>
+            </RowTemplate>
+            <TableFooter>
+                <td style="text-align: left;">
+                    <input type="text" style="width:100%;" @bind="newSl.slname" />
+                </td>
+                <td></td>
+                <td>
+                    <button @onclick="AddList">Legg til</button>
+                </td>
+            </TableFooter>
+        </Lists>
+    }
+}
+else if (storage.userToken != Guid.Empty && storage.shoppingList > 0)
+{
+    <h3 @onclick="(() => OpenList(0))"><span class="oi oi-arrow-thick-left"></span> @pageName</h3>
+
+    @if (storage.items == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <Lists Items="storage.items">
+            <TableHeader>
+                <th style="text-align: left;">Navn</th>
+                <th width="10%">Antall</th>
+                <th width="10%">Handling</th>
+                <th width="10%">Utsolgt</th>
+            </TableHeader>
+            <RowTemplate>
+                <td style="text-align: left;">@context.iname</td>
+                <td>@context.ammount</td>
+                <td>
+                    <button @onclick="(() => DeleteItem(context))">Slett</button>
+                </td>
+                <td>
+                    <input type="checkbox" value="@context.sold_out" checked="@(context.sold_out == true)" @onchange="(() => ToggleSoldOut(context))" />
+                </td>
+            </RowTemplate>
+            <TableFooter>
+                <td style="text-align: left;">
+                    <input type="text" style="width:100%;" @bind="newItem.iname" maxlength="200" />
+                </td>
+                <td>
+                    <input type="number" style="width: 50px; text-align: right;" @bind="newItem.ammount" min="1" />
+                </td>
+                <td>
+                    <button @onclick="AddItem">Legg til</button>
+                </td>
+                <td></td>
+            </TableFooter>
+        </Lists>
+    }
+}
+else
+{
+    <p>An error has occurred...</p>
+}
+
+@code {
+    private string pageName = "";
+    System.Threading.Timer timer;
+    private shopping_list newSl = new shopping_list
+    {
+        gid = 1
+    };
+    private item newItem = new item
+    {
+        added_by = 1,
+        ammount = 1
+    };
+
+    private Storage storage = new Storage
+    {
+        shoppingList = 0,
+        userToken = Guid.Empty,
+        shoppingLists = null,
+        items = null
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var tkn = await LStorage.GetItemAsync<Guid>("token");
+            var valid = await AuthenticationService.ValidateAsync(tkn);
+            if (valid)
+            {
+                storage.userToken = tkn;
+                await UpdateList();
+                StateHasChanged();
+                timer = new System.Threading.Timer(async _ =>
+                {
+                    if (storage.userToken != Guid.Empty)
+                    {
+                        await UpdateList();
+                        if (storage.shoppingList > 0)
+                        {
+                            await UpdateItems();
+                        }
+                    }
+                    await InvokeAsync(StateHasChanged);
+                }, null, 0, 20000);
+            }
+        }
+    }
+
+    private async void OpenList(int i, string name = "Handlelister")
+    {
+        storage.shoppingList = i;
+        pageName = name;
+        await UpdateItems();
+    }
+
+    private async Task UpdateList()
+    {
+        storage.shoppingLists = await ShoppingListService.GetShoppingListsAsync(storage.userToken);
+    }
+
+    private async Task AddList()
+    {
+        await ShoppingListService.AddAsync(storage.userToken, newSl);
+        await UpdateList();
+        newSl.slname = "";
+    }
+
+    private async Task DeleteList(shopping_list i)
+    {
+        await ShoppingListService.DeleteAsync(storage.userToken, i);
+        await UpdateList();
+    }
+
+    private async Task UpdateItems()
+    {
+        storage.items = await ItemService.GetItemsAsync(storage.userToken, storage.shoppingList);
+    }
+
+    private async Task AddItem()
+    {
+        newItem.slid = storage.shoppingList;
+        await ItemService.AddAsync(storage.userToken, newItem);
+        await UpdateItems();
+        newItem.iname = "";
+        newItem.ammount = 1;
+    }
+
+    private async Task DeleteItem(item i)
+    {
+        await ItemService.DeleteAsync(storage.userToken, i);
+        await UpdateItems();
+    }
+
+    private async Task ToggleSoldOut(item i)
+    {
+        i.sold_out = !i.sold_out;
+        await ItemService.UpdateAsync(storage.userToken, i);
+        await UpdateItems();
+    }
+
+    private async Task<bool>
+        Validate()
+    {
+        return await AuthenticationService.ValidateAsync(storage.userToken);
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}
